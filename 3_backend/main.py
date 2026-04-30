@@ -1,4 +1,4 @@
-import os, shutil, uuid, requests
+import os, shutil, uuid, requests, cv2, base64
 from pathlib import Path
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from PIL import Image
 from detect import predict_image
 from groq import Groq
+import numpy as np
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -66,6 +67,24 @@ async def predict(file: UploadFile = File(...)):
     result = predict_image(Image.open(fpath))
     weather = get_weather()
     return {**result, "filename": fname, "weather": weather}
+
+@app.post("/predict/frame")
+async def predict_frame(data: dict):
+    try:
+        img_data = base64.b64decode(data["frame"].split(",")[1])
+        img_array = np.frombuffer(img_data, np.uint8)
+        frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        pil_img = Image.fromarray(rgb)
+        result = predict_image(pil_img)
+        return {**result, "weather": get_weather()}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/heatmap/{filename}")
+def heatmap(filename: str):
+    p = UPLOAD_DIR / filename
+    return FileResponse(p) if p.exists() else {"error": "not found"}
 
 @app.post("/genai/report")
 async def genai_report(data: dict):
