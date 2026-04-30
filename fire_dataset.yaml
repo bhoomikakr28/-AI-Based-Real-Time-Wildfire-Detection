@@ -1,0 +1,21 @@
+# ── YOLO Dataset Config ─────────────────────────────────────────────────────
+# Download a labelled fire/smoke dataset from Roboflow and extract it here:
+#   https://universe.roboflow.com/school-tvtyg/fire-and-smoke-detection
+#
+# Expected folder layout:
+#   1_data/yolo_dataset/
+#   ├── images/
+#   │   ├── train/   ← .jpg / .png frames
+#   │   └── val/
+#   └── labels/
+#       ├── train/   ← .txt YOLO annotations
+#       └── val/
+
+path:  1_data/yolo_dataset
+train: images/train
+val:   images/val
+
+nc: 2
+names:
+  - fire
+  - smoke

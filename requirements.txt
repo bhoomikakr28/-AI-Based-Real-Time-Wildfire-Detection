@@ -1,0 +1,17 @@
+ultralytics
+opencv-python
+torch
+torchvision
+fastapi
+uvicorn[standard]
+python-multipart
+websockets
+matplotlib
+numpy
+pillow
+grad-cam
+albumentations
+scikit-learn
+
+# Phase 7 — Generative AI
+anthropic
