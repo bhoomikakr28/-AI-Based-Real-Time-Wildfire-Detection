@@ -19,3 +19,10 @@ nc: 2
 names:
   - fire
   - smoke
+path: C:/Users/LENOVO/OneDrive/Desktop/wildfire-updated/1_data/yolo_dataset
+train: train/images
+val:   valid/images
+
+nc: 1
+names:
+  - smoke
