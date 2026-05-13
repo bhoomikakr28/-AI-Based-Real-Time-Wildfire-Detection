@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 load_dotenv()
+
 import os, shutil, uuid, requests, cv2, base64, threading, math, random
 from pathlib import Path
 from fastapi import FastAPI, File, UploadFile
@@ -17,6 +18,10 @@ UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+
+print("=" * 50)
+print("GROQ KEY:", "✅ Loaded" if os.environ.get("GROQ_API_KEY") else "❌ NOT FOUND — GenAI will fail!")
+print("=" * 50)
 
 FOREST_ZONES = [
     {"name": "Bandipur National Park",     "lat": 11.6750, "lon": 76.6347, "state": "Karnataka"},
@@ -44,13 +49,19 @@ rtsp_state = {
     "thread": None
 }
 
+# ── HELPER FUNCTIONS ──────────────────────────────────────────
+
 def ask(prompt, max_tokens=1000):
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        max_tokens=max_tokens,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response.choices[0].message.content
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"Groq API error: {e}")
+        return f"Error generating response: {str(e)}"
 
 def get_weather(city="Bengaluru"):
     try:
@@ -150,6 +161,8 @@ def generate_frames():
             frame = rtsp_state["latest_frame"]
             yield (b"--frame\r\n"
                    b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
+
+# ── ROUTES ────────────────────────────────────────────────────
 
 @app.get("/")
 def health():
@@ -300,40 +313,57 @@ def heatmap(filename: str):
     p = UPLOAD_DIR / filename
     return FileResponse(p) if p.exists() else {"error": "not found"}
 
+# ── GENAI ROUTES ─────────────────────────────────────────────
+
 @app.post("/genai/report")
 async def genai_report(data: dict):
-    weather  = data.get("weather", {})
-    location = data.get("location", {})
+    # Safely get nested dicts — handles None values
+    weather  = data.get("weather")  or {}
+    location = data.get("location") or {}
     reply = ask(
         f"Generate a detailed wildfire incident report for this detection: {data}. "
-        f"Location: {location.get('forest_name','Unknown')}, {location.get('state','Unknown')}. "
-        f"Alert Level: {location.get('alert_level','UNKNOWN')}. "
-        f"Weather: Temp {weather.get('temperature')}°C, "
-        f"Humidity {weather.get('humidity')}%, Wind {weather.get('wind_speed')} km/h. "
-        "Sections: 1. INCIDENT SUMMARY 2. LOCATION ANALYSIS "
-        "3. WEATHER RISK ANALYSIS 4. FIRE SPREAD PREDICTION "
-        "5. RECOMMENDED ACTIONS 6. RESOURCE DEPLOYMENT. "
+        f"Location: {location.get('forest_name', 'Unknown')}, {location.get('state', 'Unknown')}. "
+        f"Alert Level: {location.get('alert_level', 'UNKNOWN')}. "
+        f"Weather: Temp {weather.get('temperature', 'N/A')}°C, "
+        f"Humidity {weather.get('humidity', 'N/A')}%, "
+        f"Wind {weather.get('wind_speed', 'N/A')} km/h. "
+        "Structure with these sections: "
+        "1. INCIDENT SUMMARY "
+        "2. LOCATION ANALYSIS "
+        "3. WEATHER RISK ANALYSIS "
+        "4. FIRE SPREAD PREDICTION "
+        "5. RECOMMENDED ACTIONS "
+        "6. RESOURCE DEPLOYMENT. "
         "Be specific and actionable."
     )
     return {"report": reply}
 
 @app.post("/genai/alert")
 async def genai_alert(data: dict):
-    location = data.get("location", {})
+    # Safely get location — handles None
+    location = data.get("location") or {}
     reply = ask(
-        f"Write a concise emergency SMS alert for a forest ranger: {data}. "
-        f"Location: {location.get('forest_name','Unknown forest')}. "
-        "Max 160 chars. Return only SMS text.",
+        f"Write a concise emergency SMS alert for a forest ranger about this wildfire: {data}. "
+        f"Location: {location.get('forest_name', 'Unknown forest')}, "
+        f"{location.get('state', 'Unknown state')}. "
+        f"Alert level: {location.get('alert_level', 'HIGH')}. "
+        "Max 160 characters. Be direct and actionable. Return only the SMS text.",
         max_tokens=100
     )
     return {"sms": reply}
 
 @app.post("/genai/chat")
 async def genai_chat(data: dict):
+    # Safely get context — handles None
+    context  = data.get("context")  or {}
+    location = context.get("location") or {}
     reply = ask(
-        f"You are a wildfire AI assistant. Answer: {data.get('question', '')}. "
-        f"Context: {data.get('context', {})}. Give a clear helpful answer.",
+        f"You are a wildfire detection AI assistant helping forest rangers. "
+        f"Answer this question: {data.get('question', '')}. "
+        f"Current detection context: Label={context.get('label', 'unknown')}, "
+        f"Confidence={context.get('confidence', 0)}, "
+        f"Location={location.get('forest_name', 'unknown')}. "
+        "Give a clear, helpful, actionable answer.",
         max_tokens=500
     )
     return {"reply": reply}
-    
